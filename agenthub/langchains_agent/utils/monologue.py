@@ -1,12 +1,11 @@
 import agenthub.langchains_agent.utils.json as json
 from opendevin.lib.event import Event
 
-import agenthub.langchains_agent.utils.llm as llm
+import agenthub.langchains_agent.utils.prompts as prompts
 
 class Monologue:
-    def __init__(self, model_name):
+    def __init__(self):
         self.thoughts = []
-        self.model_name = model_name
 
     def add_event(self, t):
         self.thoughts.append(t)
@@ -17,9 +16,10 @@ class Monologue:
     def get_total_length(self):
         return sum([len(json.dumps(t)) for t in self.thoughts])
 
-    def condense(self):
-        new_thoughts = llm.summarize_monologue(self.thoughts, self.model_name)
-        print("new thoughts", new_thoughts)
+    def condense(self, llm):
+        prompt = prompts.get_summarize_monologue_prompt(self.thoughts)
+        response = llm.prompt(prompt)
+        new_thoughts = prompts.parse_summary_response(response)
         self.thoughts = [Event(t['action'], t['args']) for t in new_thoughts]
 
 

@@ -3,8 +3,10 @@ from typing import List, Dict, Type
 from dataclasses import dataclass
 from enum import Enum
 
-from .lib.event import Event
-from .lib.command_manager import CommandManager
+from opendevin.lib.event import Event
+from opendevin.lib.command_manager import CommandManager
+from opendevin.controller import AgentController
+from opendevin.llm.llm import LLM
 
 class Role(Enum):
     SYSTEM = "system"  # system message for LLM
@@ -56,12 +58,12 @@ class Agent(ABC):
         self,
         instruction: str,
         workspace_dir: str,
-        model_name: str,
+        llm: LLM,
         max_steps: int = 100
     ):
         self.instruction = instruction
         self.workspace_dir = workspace_dir
-        self.model_name = model_name
+        self.llm = llm
         self.max_steps = max_steps
 
         self._complete = False

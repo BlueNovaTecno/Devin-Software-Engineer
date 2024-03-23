@@ -1,9 +1,13 @@
 from typing import List
 
-from opendevin.agent import Agent
+from opendevin.agent import Agent, Message
+import agenthub.langchains_agent.utils.prompts as prompts
+from agenthub.langchains_agent.utils.monologue import Monologue
+from agenthub.langchains_agent.utils.memory import LongTermMemory
 
-from agenthub.langchains_agent.utils.agent import Agent as LangchainsAgentImpl
 from opendevin.lib.event import Event
+
+MAX_MONOLOGUE_LENGTH = 20000
 
 INITIAL_THOUGHTS = [
     "I exist!",
@@ -50,7 +54,9 @@ class LangchainsAgent(Agent):
     def _initialize(self):
         if self._initialized:
             return
-        self.agent = LangchainsAgentImpl(self.instruction, self.model_name)
+        self.monologue = Monologue()
+        self.memory = LongTermMemory()
+
         next_is_output = False
         for thought in INITIAL_THOUGHTS:
             thought = thought.replace("$TASK", self.instruction)
@@ -72,18 +78,27 @@ class LangchainsAgent(Agent):
                     next_is_output = True
                 else:
                     event = Event("think", {"thought": thought})
-            self.agent.add_event(event)
+            self.add_event(event)
         self._initialized = True
 
     def add_event(self, event: Event) -> None:
-        self.agent.add_event(event)
+        self.monologue.add_event(event)
+        self.memory.add_event(event)
+        if self.monologue.get_total_length() > MAX_MONOLOGUE_LENGTH:
+            self.monologue.condense(self.llm)
 
     def step(self, cmd_mgr) -> Event:
         self._initialize()
-        return self.agent.get_next_action(cmd_mgr)
+        prompt = prompts.get_request_action_prompt(
+            self.instruction,
+            self.monologue.get_thoughts(),
+            cmd_mgr.background_commands
+        )
+        resp = self.llm.prompt(prompt)
+        return prompts.parse_action_response(resp)
 
     def search_memory(self, query: str) -> List[str]:
-        return self.agent.memory.search(query)
+        return self.memory.search(query)
 
     def chat(self, message: str) -> None:
         """

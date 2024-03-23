@@ -7,12 +7,14 @@ if os.getenv("DEBUG"):
     set_debug(True)
 
 from typing import List
-from langchain_core.pydantic_v1 import BaseModel
 
+from langchain_core.pydantic_v1 import BaseModel, Field
 from langchain.chains import LLMChain
 from langchain.prompts import PromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
 from langchain_openai import ChatOpenAI
+
+from opendevin.lib.event import Event
 
 ACTION_PROMPT = """
 You're a thoughtful robot. Your main task is to {task}.
@@ -95,25 +97,11 @@ class Action(BaseModel):
 class NewMonologue(BaseModel):
     new_monologue: List[Action]
 
-def get_chain(template, model_name):
-    assert "OPENAI_API_KEY" in os.environ, "Please set the OPENAI_API_KEY environment variable to use langchains_agent."
-    llm = ChatOpenAI(openai_api_key=os.getenv("OPENAI_API_KEY"), model_name=model_name)
-    prompt = PromptTemplate.from_template(template)
-    llm_chain = LLMChain(prompt=prompt, llm=llm)
-    return llm_chain
+def get_summarize_monologue_prompt(thoughts):
+    prompt = PromptTemplate.from_template(MONOLOGUE_SUMMARY_PROMPT)
+    return prompt.format(monologue=json.dumps({'old_monologue': thoughts}))
 
-def summarize_monologue(thoughts, model_name):
-    llm_chain = get_chain(MONOLOGUE_SUMMARY_PROMPT, model_name)
-    parser = JsonOutputParser(pydantic_object=NewMonologue)
-    resp = llm_chain.invoke({'monologue': json.dumps({'old_monologue': thoughts})})
-    if os.getenv("DEBUG"):
-        print("resp", resp)
-    parsed = parser.parse(resp['text'])
-    return parsed['new_monologue']
-
-def request_action(task, thoughts, model_name, background_commands=[]):
-    llm_chain = get_chain(ACTION_PROMPT, model_name)
-    parser = JsonOutputParser(pydantic_object=Action)
+def get_request_action_prompt(task, thoughts, background_commands=[]):
     hint = ''
     if len(thoughts) > 0:
         latest_thought = thoughts[-1]
@@ -132,16 +120,16 @@ def request_action(task, thoughts, model_name, background_commands=[]):
             bg_commands_message += f"\n`{id}`: {command.command}"
         bg_commands_message += "\nYou can end any process by sending a `kill` action with the numerical `id` above."
 
-    latest_thought = thoughts[-1]
-    resp = llm_chain.invoke({
-        "monologue": json.dumps(thoughts),
-        "hint": hint,
-        "task": task,
-        "background_commands": bg_commands_message,
-    })
-    if os.getenv("DEBUG"):
-        print("resp", resp)
-    parsed = parser.parse(resp['text'])
-    return parsed
+    prompt = PromptTemplate.from_template(ACTION_PROMPT)
+    return prompt.format(monologue=json.dumps(thoughts), hint=hint, task=task, background_commands=bg_commands_message)
 
+def parse_action_response(response: str) -> Event:
+    parser = JsonOutputParser(pydantic_object=Action)
+    action_dict = parser.parse(response)
+    event = Event(action_dict['action'], action_dict['args'])
+    return event
 
+def parse_summary_response(response: str) -> Event:
+    parser = JsonOutputParser(pydantic_object=NewMonologue)
+    parsed = parser.parse(response)
+    return parsed['new_monologue']

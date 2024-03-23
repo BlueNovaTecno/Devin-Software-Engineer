@@ -3,6 +3,7 @@ import argparse
 
 from opendevin.agent import Agent
 from opendevin.controller import AgentController
+from opendevin.llm.llm import LLM
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run an agent with a specific task")
@@ -13,12 +14,13 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     print(f"Running agent {args.agent_cls} (model: {args.model_name}, directory: {args.directory}) with task: \"{args.task}\"")
+    llm = LLM(args.model_name)
 
     AgentCls: Type[Agent] = Agent.get_cls(args.agent_cls)
     agent = AgentCls(
         instruction=args.task,
         workspace_dir=args.directory,
-        model_name=args.model_name
+        llm=llm,
     )
 
     controller = AgentController(agent, args.directory)
