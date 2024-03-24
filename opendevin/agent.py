@@ -5,7 +5,6 @@ from enum import Enum
 
 from opendevin.lib.event import Event
 from opendevin.lib.command_manager import CommandManager
-from opendevin.controller import AgentController
 from opendevin.llm.llm import LLM
 
 class Role(Enum):

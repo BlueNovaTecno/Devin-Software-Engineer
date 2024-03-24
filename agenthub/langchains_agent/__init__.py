@@ -1,6 +1,6 @@
 from typing import List
 
-from opendevin.agent import Agent, Message
+from opendevin.agent import Agent
 import agenthub.langchains_agent.utils.prompts as prompts
 from agenthub.langchains_agent.utils.monologue import Monologue
 from agenthub.langchains_agent.utils.memory import LongTermMemory
