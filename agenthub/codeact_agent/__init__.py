@@ -1,12 +1,12 @@
 import os
 import re
-from litellm import completion
 from termcolor import colored
 from typing import List, Dict
 
 from opendevin.agent import Agent, Message, Role
 from opendevin.lib.event import Event
 from opendevin.lib.command_manager import CommandManager
+from opendevin.llm.llm import LLM
 from opendevin.sandbox.sandbox import DockerInteractive
 
 assert (
@@ -55,7 +55,7 @@ class CodeActAgent(Agent):
         self,
         instruction: str,
         workspace_dir: str,
-        model_name: str,
+        llm: LLM,
         max_steps: int = 100
     ) -> None:
         """
@@ -65,7 +65,7 @@ class CodeActAgent(Agent):
         - instruction (str): The instruction for the agent to execute.
         - max_steps (int): The maximum number of steps to run the agent.
         """
-        super().__init__(instruction, workspace_dir, model_name, max_steps)
+        super().__init__(instruction, workspace_dir, llm, max_steps)
         self._history = [Message(Role.SYSTEM, SYSTEM_MESSAGE)]
         self._history.append(Message(Role.USER, instruction))
         self.env = DockerInteractive(workspace_dir=workspace_dir)
@@ -80,13 +80,12 @@ class CodeActAgent(Agent):
         be implemented by subclasses to define the specific execution logic.
         """
         for _ in range(self.max_steps):
-            response = completion(
-                messages=self._history_to_messages(),
-                model=self.model_name,
-                stop=["</execute>"],
-                temperature=0.0,
-                seed=42,
-            )
+            args = {
+                'temperature': 0.0,
+                'stop': ["</execute>"],
+                'seed': 42,
+            }
+            response = self.llm.prompt_with_messages(self._history_to_messages(), args)
             action = parse_response(response)
             self._history.append(Message(Role.ASSISTANT, action))
             print(colored("===ASSISTANT:===\n" + action, "yellow"))
